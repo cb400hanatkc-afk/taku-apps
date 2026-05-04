@@ -206,6 +206,56 @@
       padding: 10px 14px; margin-top: 12px; display: none;
     }
 
+    /* ── Search panel ── */
+    #searchPanel {
+      position: fixed; top: 56px; left: 0; right: 0;
+      background: white; z-index: 999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      display: none; flex-direction: column;
+      max-height: 70vh;
+    }
+    #searchPanel.open { display: flex; }
+
+    #searchInputWrap {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-bottom: 1px solid #f3f4f6;
+    }
+    #searchInput {
+      flex: 1; border: none; outline: none;
+      font-size: 16px; font-family: inherit; color: #111827;
+    }
+    #searchInput::placeholder { color: #9ca3af; }
+    #searchClearBtn {
+      background: none; border: none; color: #9ca3af;
+      font-size: 18px; cursor: pointer; padding: 2px 4px; line-height: 1;
+    }
+
+    #searchResults { overflow-y: auto; }
+    .search-result {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f9fafb;
+      transition: background 0.1s;
+    }
+    .search-result:hover { background: #f0fdf4; }
+    .search-result-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .search-result-name { font-size: 15px; font-weight: 600; color: #111827; }
+    .search-result-sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
+    .search-loading { padding: 20px; text-align: center; color: #9ca3af; font-size: 14px; }
+    .search-empty { padding: 20px; text-align: center; color: #9ca3af; font-size: 14px; }
+
+    /* ── Add-from-search floating button ── */
+    #searchAddBtn {
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, #166534, #15803d);
+      color: white; border: none; border-radius: 24px;
+      padding: 12px 24px; font-size: 15px; font-weight: 700;
+      cursor: pointer; font-family: inherit; z-index: 1001;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25); display: none;
+      white-space: nowrap;
+    }
+    #searchAddBtn.visible { display: block; }
+
     /* ── Custom Leaflet marker ── */
     .custom-marker {
       width: 32px; height: 32px;
@@ -230,8 +280,20 @@
 <div id="topbar">
   <h1>家族旅行マップ</h1>
   <div class="status-dot" id="statusDot" title="接続状態"></div>
+  <button class="topbar-btn" onclick="toggleSearch()">🔍</button>
   <button class="topbar-btn" onclick="openList()">一覧</button>
   <button class="topbar-btn" onclick="openSetup()" title="Firebase設定">⚙</button>
+</div>
+
+<!-- Search panel -->
+<div id="searchPanel">
+  <div id="searchInputWrap">
+    <span style="font-size:18px;color:#9ca3af">🔍</span>
+    <input id="searchInput" type="text" placeholder="地名・スポットを検索（例: 富士山、金閣寺）"
+           oninput="onSearchInput(this.value)" autocomplete="off">
+    <button id="searchClearBtn" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="searchResults"></div>
 </div>
 
 <!-- Map -->
@@ -239,6 +301,9 @@
 
 <!-- Tap instruction -->
 <div id="selectBanner">地図をタップして場所を選んでね ✈</div>
+
+<!-- Add pin at searched location -->
+<button id="searchAddBtn" onclick="addPinFromSearch()">＋ ここに旅行を追加</button>
 
 <!-- FAB -->
 <button id="fab" onclick="toggleAdd()">＋</button>
@@ -360,6 +425,8 @@ let pendingLat = null;
 let pendingLng = null;
 let currentViewId = null;
 let photoData = null;
+let searchMarker = null;
+let searchDebounceTimer = null;
 
 // ── Map Setup ─────────────────────────────────────────────────────────────────
 function initMap() {
@@ -371,12 +438,142 @@ function initMap() {
   }).addTo(map);
 
   map.on('click', function(e) {
+    if (document.getElementById('searchPanel').classList.contains('open')) {
+      closeSearch();
+      return;
+    }
     if (!selectingMode) return;
     pendingLat = e.latlng.lat;
     pendingLng = e.latlng.lng;
     exitSelectingMode();
     openAddForm();
   });
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+function toggleSearch() {
+  const panel = document.getElementById('searchPanel');
+  if (panel.classList.contains('open')) {
+    closeSearch();
+  } else {
+    panel.classList.add('open');
+    document.getElementById('searchInput').focus();
+    adjustMapTop(true);
+  }
+}
+
+function closeSearch() {
+  document.getElementById('searchPanel').classList.remove('open');
+  document.getElementById('searchResults').innerHTML = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchAddBtn').classList.remove('visible');
+  if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+  adjustMapTop(false);
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  document.getElementById('searchAddBtn').classList.remove('visible');
+  if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+  document.getElementById('searchInput').focus();
+}
+
+function adjustMapTop(searchOpen) {
+  const panelHeight = searchOpen ? 56 : 0;
+  document.getElementById('map').style.top = (56 + panelHeight) + 'px';
+  if (map) map.invalidateSize();
+}
+
+function onSearchInput(value) {
+  clearTimeout(searchDebounceTimer);
+  if (!value.trim()) {
+    document.getElementById('searchResults').innerHTML = '';
+    return;
+  }
+  document.getElementById('searchResults').innerHTML =
+    '<div class="search-loading">検索中...</div>';
+  searchDebounceTimer = setTimeout(() => searchPlaces(value.trim()), 400);
+}
+
+async function searchPlaces(query) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&accept-language=ja&limit=6&addressdetails=1`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'ja' } });
+    const data = await res.json();
+    renderSearchResults(data);
+  } catch (e) {
+    document.getElementById('searchResults').innerHTML =
+      '<div class="search-empty">検索できませんでした。もう一度お試しください。</div>';
+  }
+}
+
+function renderSearchResults(results) {
+  const el = document.getElementById('searchResults');
+  if (!results.length) {
+    el.innerHTML = '<div class="search-empty">見つかりませんでした</div>';
+    return;
+  }
+  el.innerHTML = results.map((r, i) => {
+    const name = r.namedetails?.name || r.display_name.split(',')[0];
+    const sub = r.display_name.split(',').slice(1, 3).join(',').trim();
+    const icon = getPlaceIcon(r.type, r.class);
+    return `<div class="search-result" data-idx="${i}" data-lat="${r.lat}" data-lng="${r.lon}" data-name="${escapeAttr(name)}">
+      <div class="search-result-icon">${icon}</div>
+      <div>
+        <div class="search-result-name">${escapeHtml(name)}</div>
+        <div class="search-result-sub">${escapeHtml(sub)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.search-result').forEach(el => {
+    el.addEventListener('click', () => {
+      const lat = parseFloat(el.dataset.lat);
+      const lng = parseFloat(el.dataset.lng);
+      const name = el.dataset.name;
+      selectSearchResult(lat, lng, name);
+    });
+  });
+}
+
+function getPlaceIcon(type, cls) {
+  if (cls === 'natural' || type === 'peak' || type === 'volcano') return '⛰';
+  if (type === 'beach' || type === 'bay') return '🏖';
+  if (cls === 'tourism' || type === 'museum' || type === 'attraction') return '🏛';
+  if (type === 'shrine' || type === 'temple') return '⛩';
+  if (type === 'castle') return '🏯';
+  if (cls === 'place' && (type === 'city' || type === 'town')) return '🏙';
+  if (type === 'village' || type === 'hamlet') return '🏘';
+  if (type === 'station' || cls === 'railway') return '🚉';
+  if (type === 'restaurant' || type === 'cafe') return '🍽';
+  if (type === 'park' || type === 'garden') return '🌿';
+  return '📍';
+}
+
+function selectSearchResult(lat, lng, name) {
+  closeSearch();
+  map.setView([lat, lng], 14, { animate: true });
+
+  if (searchMarker) map.removeLayer(searchMarker);
+  searchMarker = L.circleMarker([lat, lng], {
+    radius: 10, color: '#15803d', fillColor: '#4ade80',
+    fillOpacity: 0.7, weight: 3
+  }).addTo(map);
+
+  pendingLat = lat;
+  pendingLng = lng;
+  document.querySelector('#addModal #tripName') &&
+    (document.getElementById('tripName').dataset.searchName = name);
+  document.getElementById('searchAddBtn').classList.add('visible');
+}
+
+function addPinFromSearch() {
+  document.getElementById('searchAddBtn').classList.remove('visible');
+  if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+  // Pre-fill place name from search
+  const savedName = document.getElementById('tripName')?.dataset.searchName || '';
+  openAddForm(savedName);
 }
 
 // ── Selecting Mode ────────────────────────────────────────────────────────────
@@ -403,9 +600,9 @@ function exitSelectingMode() {
 }
 
 // ── Add Form ──────────────────────────────────────────────────────────────────
-function openAddForm() {
+function openAddForm(prefilledName = '') {
   photoData = null;
-  document.getElementById('tripName').value = '';
+  document.getElementById('tripName').value = prefilledName;
   document.getElementById('tripDate').value = todayString();
   document.getElementById('tripMember').value = '';
   document.getElementById('tripMemo').value = '';
