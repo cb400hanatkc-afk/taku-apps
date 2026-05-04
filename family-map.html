@@ -405,9 +405,7 @@
 
     <div class="form-group">
       <label class="form-label">Firebase設定（JSON形式で貼り付け）</label>
-      <textarea class="form-input" id="firebaseConfigInput" style="min-height:150px;font-family:monospace;font-size:12px;line-height:1.5" placeholder="Firebaseコンソールに表示された
-const firebaseConfig = { ... }
-をそのままここに貼り付けてください"></textarea>
+      <textarea class="form-input" id="firebaseConfigInput" style="min-height:150px;font-family:monospace;font-size:12px;line-height:1.5" placeholder="Firebaseコンソールに表示された&#10;const firebaseConfig = { ... }&#10;をそのままここに貼り付けてください"></textarea>
     </div>
 
     <button class="btn-primary" onclick="saveFirebaseConfig()">設定を保存して始める</button>
@@ -416,7 +414,6 @@ const firebaseConfig = { ... }
 </div>
 
 <script>
-// ── State ─────────────────────────────────────────────────────────────────────
 let map, db;
 let trips = {};
 let markers = {};
@@ -428,7 +425,6 @@ let photoData = null;
 let searchMarker = null;
 let searchDebounceTimer = null;
 
-// ── Map Setup ─────────────────────────────────────────────────────────────────
 function initMap() {
   map = L.map('map', { zoomControl: false }).setView([36.5, 136.5], 6);
   L.control.zoom({ position: 'bottomleft' }).addTo(map);
@@ -436,12 +432,8 @@ function initMap() {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 18
   }).addTo(map);
-
   map.on('click', function(e) {
-    if (document.getElementById('searchPanel').classList.contains('open')) {
-      closeSearch();
-      return;
-    }
+    if (document.getElementById('searchPanel').classList.contains('open')) { closeSearch(); return; }
     if (!selectingMode) return;
     pendingLat = e.latlng.lat;
     pendingLng = e.latlng.lng;
@@ -450,16 +442,10 @@ function initMap() {
   });
 }
 
-// ── Search ────────────────────────────────────────────────────────────────────
 function toggleSearch() {
   const panel = document.getElementById('searchPanel');
-  if (panel.classList.contains('open')) {
-    closeSearch();
-  } else {
-    panel.classList.add('open');
-    document.getElementById('searchInput').focus();
-    adjustMapTop(true);
-  }
+  if (panel.classList.contains('open')) { closeSearch(); }
+  else { panel.classList.add('open'); document.getElementById('searchInput').focus(); adjustMapTop(true); }
 }
 
 function closeSearch() {
@@ -479,60 +465,41 @@ function clearSearch() {
   document.getElementById('searchInput').focus();
 }
 
-function adjustMapTop(searchOpen) {
-  const panelHeight = searchOpen ? 56 : 0;
-  document.getElementById('map').style.top = (56 + panelHeight) + 'px';
+function adjustMapTop(open) {
+  document.getElementById('map').style.top = (56 + (open ? 56 : 0)) + 'px';
   if (map) map.invalidateSize();
 }
 
 function onSearchInput(value) {
   clearTimeout(searchDebounceTimer);
-  if (!value.trim()) {
-    document.getElementById('searchResults').innerHTML = '';
-    return;
-  }
-  document.getElementById('searchResults').innerHTML =
-    '<div class="search-loading">検索中...</div>';
+  if (!value.trim()) { document.getElementById('searchResults').innerHTML = ''; return; }
+  document.getElementById('searchResults').innerHTML = '<div class="search-loading">検索中...</div>';
   searchDebounceTimer = setTimeout(() => searchPlaces(value.trim()), 400);
 }
 
 async function searchPlaces(query) {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&accept-language=ja&limit=6&addressdetails=1`;
+    const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query) + '&format=json&accept-language=ja&limit=6&addressdetails=1';
     const res = await fetch(url, { headers: { 'Accept-Language': 'ja' } });
     const data = await res.json();
     renderSearchResults(data);
-  } catch (e) {
-    document.getElementById('searchResults').innerHTML =
-      '<div class="search-empty">検索できませんでした。もう一度お試しください。</div>';
+  } catch(e) {
+    document.getElementById('searchResults').innerHTML = '<div class="search-empty">検索できませんでした。もう一度お試しください。</div>';
   }
 }
 
 function renderSearchResults(results) {
   const el = document.getElementById('searchResults');
-  if (!results.length) {
-    el.innerHTML = '<div class="search-empty">見つかりませんでした</div>';
-    return;
-  }
+  if (!results.length) { el.innerHTML = '<div class="search-empty">見つかりませんでした</div>'; return; }
   el.innerHTML = results.map((r, i) => {
-    const name = r.namedetails?.name || r.display_name.split(',')[0];
+    const name = (r.namedetails && r.namedetails.name) || r.display_name.split(',')[0];
     const sub = r.display_name.split(',').slice(1, 3).join(',').trim();
     const icon = getPlaceIcon(r.type, r.class);
-    return `<div class="search-result" data-idx="${i}" data-lat="${r.lat}" data-lng="${r.lon}" data-name="${escapeAttr(name)}">
-      <div class="search-result-icon">${icon}</div>
-      <div>
-        <div class="search-result-name">${escapeHtml(name)}</div>
-        <div class="search-result-sub">${escapeHtml(sub)}</div>
-      </div>
-    </div>`;
+    return '<div class="search-result" data-lat="' + r.lat + '" data-lng="' + r.lon + '" data-name="' + escapeAttr(name) + '"><div class="search-result-icon">' + icon + '</div><div><div class="search-result-name">' + escapeHtml(name) + '</div><div class="search-result-sub">' + escapeHtml(sub) + '</div></div></div>';
   }).join('');
-
-  el.querySelectorAll('.search-result').forEach(el => {
-    el.addEventListener('click', () => {
-      const lat = parseFloat(el.dataset.lat);
-      const lng = parseFloat(el.dataset.lng);
-      const name = el.dataset.name;
-      selectSearchResult(lat, lng, name);
+  el.querySelectorAll('.search-result').forEach(function(item) {
+    item.addEventListener('click', function() {
+      selectSearchResult(parseFloat(item.dataset.lat), parseFloat(item.dataset.lng), item.dataset.name);
     });
   });
 }
@@ -554,53 +521,40 @@ function getPlaceIcon(type, cls) {
 function selectSearchResult(lat, lng, name) {
   closeSearch();
   map.setView([lat, lng], 14, { animate: true });
-
   if (searchMarker) map.removeLayer(searchMarker);
-  searchMarker = L.circleMarker([lat, lng], {
-    radius: 10, color: '#15803d', fillColor: '#4ade80',
-    fillOpacity: 0.7, weight: 3
-  }).addTo(map);
-
+  searchMarker = L.circleMarker([lat, lng], { radius: 10, color: '#15803d', fillColor: '#4ade80', fillOpacity: 0.7, weight: 3 }).addTo(map);
   pendingLat = lat;
   pendingLng = lng;
-  document.querySelector('#addModal #tripName') &&
-    (document.getElementById('tripName').dataset.searchName = name);
+  document.getElementById('tripName').dataset.searchName = name;
   document.getElementById('searchAddBtn').classList.add('visible');
 }
 
 function addPinFromSearch() {
   document.getElementById('searchAddBtn').classList.remove('visible');
   if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
-  // Pre-fill place name from search
-  const savedName = document.getElementById('tripName')?.dataset.searchName || '';
-  openAddForm(savedName);
+  openAddForm(document.getElementById('tripName').dataset.searchName || '');
 }
 
-// ── Selecting Mode ────────────────────────────────────────────────────────────
-function toggleAdd() {
-  selectingMode ? exitSelectingMode() : enterSelectingMode();
-}
+function toggleAdd() { selectingMode ? exitSelectingMode() : enterSelectingMode(); }
 
 function enterSelectingMode() {
   selectingMode = true;
   document.getElementById('map').classList.add('selecting');
   document.getElementById('selectBanner').classList.add('visible');
-  const fab = document.getElementById('fab');
-  fab.textContent = '✕';
-  fab.classList.add('cancel');
+  document.getElementById('fab').textContent = '✕';
+  document.getElementById('fab').classList.add('cancel');
 }
 
 function exitSelectingMode() {
   selectingMode = false;
   document.getElementById('map').classList.remove('selecting');
   document.getElementById('selectBanner').classList.remove('visible');
-  const fab = document.getElementById('fab');
-  fab.textContent = '＋';
-  fab.classList.remove('cancel');
+  document.getElementById('fab').textContent = '＋';
+  document.getElementById('fab').classList.remove('cancel');
 }
 
-// ── Add Form ──────────────────────────────────────────────────────────────────
-function openAddForm(prefilledName = '') {
+function openAddForm(prefilledName) {
+  prefilledName = prefilledName || '';
   photoData = null;
   document.getElementById('tripName').value = prefilledName;
   document.getElementById('tripDate').value = todayString();
@@ -610,40 +564,31 @@ function openAddForm(prefilledName = '') {
   document.getElementById('photoArea').classList.remove('has-photo');
   document.querySelector('#photoArea .photo-placeholder').style.display = '';
   document.getElementById('photoInput').value = '';
-  document.getElementById('locationTag').textContent =
-    `📍 緯度 ${pendingLat.toFixed(4)}, 経度 ${pendingLng.toFixed(4)}`;
+  document.getElementById('locationTag').textContent = '📍 緯度 ' + pendingLat.toFixed(4) + ', 経度 ' + pendingLng.toFixed(4);
   document.getElementById('addModal').classList.add('open');
 }
 
 function closeAdd() {
   document.getElementById('addModal').classList.remove('open');
-  pendingLat = null;
-  pendingLng = null;
+  pendingLat = null; pendingLng = null;
 }
 
-// ── Photo ─────────────────────────────────────────────────────────────────────
 function handlePhoto(input) {
-  const file = input.files[0];
+  var file = input.files[0];
   if (!file) return;
-  const reader = new FileReader();
+  var reader = new FileReader();
   reader.onload = function(e) {
-    const img = new Image();
+    var img = new Image();
     img.onload = function() {
-      const MAX = 480;
-      let { width, height } = img;
-      if (width > height) {
-        if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
-      } else {
-        if (height > MAX) { width = Math.round(width * MAX / height); height = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      var MAX = 480, w = img.width, h = img.height;
+      if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+      else { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       photoData = canvas.toDataURL('image/jpeg', 0.78);
-      const preview = document.getElementById('photoPreview');
-      preview.src = photoData;
-      preview.style.display = 'block';
+      document.getElementById('photoPreview').src = photoData;
+      document.getElementById('photoPreview').style.display = 'block';
       document.getElementById('photoArea').classList.add('has-photo');
       document.querySelector('#photoArea .photo-placeholder').style.display = 'none';
     };
@@ -652,115 +597,69 @@ function handlePhoto(input) {
   reader.readAsDataURL(file);
 }
 
-// ── Save ──────────────────────────────────────────────────────────────────────
 function saveTrip() {
-  const name = document.getElementById('tripName').value.trim();
-  const date = document.getElementById('tripDate').value;
+  var name = document.getElementById('tripName').value.trim();
+  var date = document.getElementById('tripDate').value;
   if (!name) { alert('場所の名前を入力してください'); return; }
   if (!date) { alert('日にちを入力してください'); return; }
-
-  const trip = {
-    name,
-    date,
-    member: document.getElementById('tripMember').value.trim(),
-    memo: document.getElementById('tripMemo').value.trim(),
-    lat: pendingLat,
-    lng: pendingLng,
-    photo: photoData || null,
-    createdAt: Date.now()
-  };
-
-  const btn = document.getElementById('saveBtn');
-  btn.disabled = true;
-  btn.textContent = '保存中...';
-
-  db.ref('trips').push(trip)
-    .then(() => closeAdd())
-    .catch(err => alert('保存エラー: ' + err.message))
-    .finally(() => { btn.disabled = false; btn.textContent = '保存する'; });
+  var trip = { name: name, date: date, member: document.getElementById('tripMember').value.trim(), memo: document.getElementById('tripMemo').value.trim(), lat: pendingLat, lng: pendingLng, photo: photoData || null, createdAt: Date.now() };
+  var btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  db.ref('trips').push(trip).then(function() { closeAdd(); }).catch(function(err) { alert('保存エラー: ' + err.message); }).finally(function() { btn.disabled = false; btn.textContent = '保存する'; });
 }
 
-// ── Markers ───────────────────────────────────────────────────────────────────
 function markerIcon() {
-  return L.divIcon({
-    html: '<div class="custom-marker"></div>',
-    className: '',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -36]
-  });
+  return L.divIcon({ html: '<div class="custom-marker"></div>', className: '', iconSize: [32,32], iconAnchor: [16,32], popupAnchor: [0,-36] });
 }
 
 function addMarker(id, trip) {
   if (markers[id]) map.removeLayer(markers[id]);
-  const marker = L.marker([trip.lat, trip.lng], { icon: markerIcon() });
-  marker.bindPopup(`
-    <div class="popup-name">${escapeHtml(trip.name)}</div>
-    <div class="popup-date">${trip.date ? formatDate(trip.date) : ''}</div>
-    <div class="popup-tap">タップして詳細を見る</div>
-  `);
-  marker.on('click', () => { marker.openPopup(); });
-  marker.on('popupopen', () => {
-    setTimeout(() => {
-      const el = marker.getPopup().getElement();
-      if (el) el.addEventListener('click', () => { marker.closePopup(); openView(id); });
+  var marker = L.marker([trip.lat, trip.lng], { icon: markerIcon() });
+  marker.bindPopup('<div class="popup-name">' + escapeHtml(trip.name) + '</div><div class="popup-date">' + (trip.date ? formatDate(trip.date) : '') + '</div><div class="popup-tap">タップして詳細を見る</div>');
+  marker.on('click', function() { marker.openPopup(); });
+  marker.on('popupopen', function() {
+    setTimeout(function() {
+      var el = marker.getPopup().getElement();
+      if (el) el.addEventListener('click', function() { marker.closePopup(); openView(id); });
     }, 10);
   });
   marker.addTo(map);
   markers[id] = marker;
 }
 
-// ── Firebase Sync ─────────────────────────────────────────────────────────────
 function initFirebase(config) {
   try {
     if (!firebase.apps.length) firebase.initializeApp(config);
     db = firebase.database();
-
-    db.ref('.info/connected').on('value', snap => {
+    db.ref('.info/connected').on('value', function(snap) {
       document.getElementById('statusDot').classList.toggle('connected', snap.val() === true);
     });
-
-    db.ref('trips').on('value', snap => {
-      const data = snap.val() || {};
-      Object.keys(markers).forEach(id => {
-        if (!data[id]) { map.removeLayer(markers[id]); delete markers[id]; }
-      });
+    db.ref('trips').on('value', function(snap) {
+      var data = snap.val() || {};
+      Object.keys(markers).forEach(function(id) { if (!data[id]) { map.removeLayer(markers[id]); delete markers[id]; } });
       trips = data;
-      Object.entries(data).forEach(([id, trip]) => addMarker(id, trip));
+      Object.entries(data).forEach(function(entry) { addMarker(entry[0], entry[1]); });
     });
-
     return true;
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
+  } catch(e) { console.error(e); return false; }
 }
 
-// ── View Modal ────────────────────────────────────────────────────────────────
 function openView(id) {
-  const trip = trips[id];
+  var trip = trips[id];
   if (!trip) return;
   currentViewId = id;
-
-  const photo = document.getElementById('viewPhoto');
-  if (trip.photo) { photo.src = trip.photo; photo.style.display = 'block'; }
-  else { photo.style.display = 'none'; }
-
+  var photo = document.getElementById('viewPhoto');
+  if (trip.photo) { photo.src = trip.photo; photo.style.display = 'block'; } else { photo.style.display = 'none'; }
   document.getElementById('viewName').textContent = trip.name;
-
-  const tags = document.getElementById('viewTags');
+  var tags = document.getElementById('viewTags');
   tags.innerHTML = '';
-  if (trip.date) tags.innerHTML += `<span class="tag">📅 ${formatDate(trip.date)}</span>`;
-  if (trip.member) tags.innerHTML += `<span class="tag">👨‍👩‍👧 ${escapeHtml(trip.member)}</span>`;
-
+  if (trip.date) tags.innerHTML += '<span class="tag">📅 ' + formatDate(trip.date) + '</span>';
+  if (trip.member) tags.innerHTML += '<span class="tag">👨‍👩‍👧 ' + escapeHtml(trip.member) + '</span>';
   document.getElementById('viewMemo').textContent = trip.memo || '';
   document.getElementById('viewModal').classList.add('open');
 }
 
-function closeView() {
-  document.getElementById('viewModal').classList.remove('open');
-  currentViewId = null;
-}
+function closeView() { document.getElementById('viewModal').classList.remove('open'); currentViewId = null; }
 
 function deleteCurrentTrip() {
   if (!currentViewId) return;
@@ -769,161 +668,106 @@ function deleteCurrentTrip() {
   closeView();
 }
 
-// ── Trip List ─────────────────────────────────────────────────────────────────
 function openList() {
-  const sorted = Object.entries(trips).sort((a, b) =>
-    (b[1].date || '').localeCompare(a[1].date || ''));
-
-  document.getElementById('tripCount').textContent = `(${sorted.length}件)`;
-
-  const listEl = document.getElementById('tripList');
-  if (sorted.length === 0) {
+  var sorted = Object.entries(trips).sort(function(a, b) { return (b[1].date || '').localeCompare(a[1].date || ''); });
+  document.getElementById('tripCount').textContent = '(' + sorted.length + '件)';
+  var listEl = document.getElementById('tripList');
+  if (!sorted.length) {
     listEl.innerHTML = '<div class="empty-state"><div class="icon">🗾</div><div>まだ旅行が記録されていません</div></div>';
   } else {
-    listEl.innerHTML = sorted.map(([id, trip]) => `
-      <div class="trip-item" data-id="${escapeAttr(id)}">
-        <div class="trip-thumb">
-          ${trip.photo ? `<img src="${trip.photo}" alt="">` : '📍'}
-        </div>
-        <div class="trip-info">
-          <h3>${escapeHtml(trip.name)}</h3>
-          <p>${trip.date ? formatDate(trip.date) : '日付不明'}${trip.member ? ' · ' + escapeHtml(trip.member) : ''}</p>
-        </div>
-      </div>
-    `).join('');
-
-    listEl.querySelectorAll('.trip-item').forEach(el => {
-      el.addEventListener('click', () => goToTrip(el.dataset.id));
+    listEl.innerHTML = sorted.map(function(entry) {
+      var id = entry[0], trip = entry[1];
+      return '<div class="trip-item" data-id="' + escapeAttr(id) + '"><div class="trip-thumb">' + (trip.photo ? '<img src="' + trip.photo + '" alt="">' : '📍') + '</div><div class="trip-info"><h3>' + escapeHtml(trip.name) + '</h3><p>' + (trip.date ? formatDate(trip.date) : '日付不明') + (trip.member ? ' · ' + escapeHtml(trip.member) : '') + '</p></div></div>';
+    }).join('');
+    listEl.querySelectorAll('.trip-item').forEach(function(el) {
+      el.addEventListener('click', function() { goToTrip(el.dataset.id); });
     });
   }
-
   document.getElementById('listModal').classList.add('open');
 }
 
-function closeList() {
-  document.getElementById('listModal').classList.remove('open');
-}
+function closeList() { document.getElementById('listModal').classList.remove('open'); }
 
 function goToTrip(id) {
   closeList();
-  const trip = trips[id];
+  var trip = trips[id];
   if (!trip) return;
   map.setView([trip.lat, trip.lng], 12, { animate: true });
-  setTimeout(() => openView(id), 450);
+  setTimeout(function() { openView(id); }, 450);
 }
 
-// ── Firebase Setup ────────────────────────────────────────────────────────────
 function openSetup() {
-  const saved = localStorage.getItem('firebaseConfig');
+  var saved = localStorage.getItem('firebaseConfig');
   if (saved) document.getElementById('firebaseConfigInput').value = saved;
   document.getElementById('setupModal').classList.add('open');
 }
 
 function parseFirebaseConfig(raw) {
-  // Extract just the { ... } block from firebaseConfig, even if extra code is pasted
-  let str;
-  const configMatch = raw.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;/);
-  if (configMatch) {
-    str = configMatch[1];
-  } else {
-    const objectMatch = raw.match(/(\{[\s\S]*\})/);
-    if (objectMatch) {
-      str = objectMatch[1];
-    } else {
-      str = '{' + raw.trim().replace(/,\s*$/, '') + '}';
-    }
+  var str;
+  var configMatch = raw.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;/);
+  if (configMatch) { str = configMatch[1]; }
+  else {
+    var objectMatch = raw.match(/(\{[\s\S]*\})/);
+    if (objectMatch) { str = objectMatch[1]; }
+    else { str = '{' + raw.trim().replace(/,\s*$/, '') + '}'; }
   }
-
-  // Try strict JSON first
-  try { return JSON.parse(str); } catch (e) {}
-
-  // Try JavaScript object literal (unquoted keys from Firebase console)
+  try { return JSON.parse(str); } catch(e) {}
   try {
-    const jsonStr = str
+    var jsonStr = str
       .replace(/\/\/[^\n]*/g, '')
       .replace(/,(\s*})/g, '$1')
       .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3')
       .replace(/'/g, '"');
     return JSON.parse(jsonStr);
-  } catch (e) {}
-
+  } catch(e) {}
   return null;
 }
 
 function saveFirebaseConfig() {
-  const raw = document.getElementById('firebaseConfigInput').value.trim();
-  const errEl = document.getElementById('setupError');
-  errEl.style.display = 'none';
-
-  const config = parseFirebaseConfig(raw);
-  if (!config) {
-    showSetupError('設定の形式が正しくありません。Firebaseコンソールの「firebaseConfig = { ... }」の部分をそのままコピーして貼り付けてください。');
-    return;
-  }
-
-  if (!config.databaseURL) {
-    showSetupError('"databaseURL" が見つかりません。Realtime Database を有効にしてから設定をコピーしてください。');
-    return;
-  }
-
+  var raw = document.getElementById('firebaseConfigInput').value.trim();
+  document.getElementById('setupError').style.display = 'none';
+  var config = parseFirebaseConfig(raw);
+  if (!config) { showSetupError('設定の形式が正しくありません。Firebaseコンソールの「firebaseConfig = { ... }」の部分をそのままコピーして貼り付けてください。'); return; }
+  if (!config.databaseURL) { showSetupError('"databaseURL" が見つかりません。Realtime Database を有効にしてから設定をコピーしてください。'); return; }
   if (initFirebase(config)) {
     localStorage.setItem('firebaseConfig', JSON.stringify(config));
     document.getElementById('setupModal').classList.remove('open');
-  } else {
-    showSetupError('Firebase の初期化に失敗しました。設定内容を確認してください。');
-  }
+  } else { showSetupError('Firebase の初期化に失敗しました。設定内容を確認してください。'); }
 }
 
-function showSetupError(msg) {
-  const el = document.getElementById('setupError');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
+function showSetupError(msg) { var el = document.getElementById('setupError'); el.textContent = msg; el.style.display = 'block'; }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function todayString() {
-  return new Date().toISOString().split('T')[0];
-}
+function todayString() { return new Date().toISOString().split('T')[0]; }
 
 function formatDate(s) {
-  const d = new Date(s + 'T00:00:00');
+  var d = new Date(s + 'T00:00:00');
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function escapeAttr(s) {
-  return String(s).replace(/[^A-Za-z0-9_-]/g, '');
-}
+function escapeAttr(s) { return String(s).replace(/[^A-Za-z0-9_-]/g, ''); }
 
-// Close any modal on backdrop click (except setup when not yet configured)
-document.querySelectorAll('.modal-backdrop').forEach(el => {
+document.querySelectorAll('.modal-backdrop').forEach(function(el) {
   el.addEventListener('click', function(e) {
     if (e.target !== this) return;
-    if (this.id === 'setupModal' && !db) return; // can't dismiss without config
+    if (this.id === 'setupModal' && !db) return;
     this.classList.remove('open');
   });
 });
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
 initMap();
 
-const savedConfig = localStorage.getItem('firebaseConfig');
+var savedConfig = localStorage.getItem('firebaseConfig');
 if (savedConfig) {
   try {
     if (!initFirebase(JSON.parse(savedConfig))) {
       localStorage.removeItem('firebaseConfig');
       document.getElementById('setupModal').classList.add('open');
     }
-  } catch (e) {
-    document.getElementById('setupModal').classList.add('open');
-  }
+  } catch(e) { document.getElementById('setupModal').classList.add('open'); }
 } else {
   document.getElementById('setupModal').classList.add('open');
 }
