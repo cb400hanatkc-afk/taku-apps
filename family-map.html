@@ -623,14 +623,18 @@ function openSetup() {
 }
 
 function parseFirebaseConfig(raw) {
-  let str = raw.trim()
-    .replace(/^const\s+\w+\s*=\s*/, '')
-    .replace(/;$/, '')
-    .trim();
-
-  // Wrap in braces if user copied only the inner key-value pairs
-  if (!str.startsWith('{')) {
-    str = '{' + str.replace(/,\s*$/, '') + '}';
+  // Extract just the { ... } block from firebaseConfig, even if extra code is pasted
+  let str;
+  const configMatch = raw.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;/);
+  if (configMatch) {
+    str = configMatch[1];
+  } else {
+    const objectMatch = raw.match(/(\{[\s\S]*\})/);
+    if (objectMatch) {
+      str = objectMatch[1];
+    } else {
+      str = '{' + raw.trim().replace(/,\s*$/, '') + '}';
+    }
   }
 
   // Try strict JSON first
@@ -640,7 +644,7 @@ function parseFirebaseConfig(raw) {
   try {
     const jsonStr = str
       .replace(/\/\/[^\n]*/g, '')
-      .replace(/,(\s*[}\]])/g, '$1')
+      .replace(/,(\s*})/g, '$1')
       .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3')
       .replace(/'/g, '"');
     return JSON.parse(jsonStr);
