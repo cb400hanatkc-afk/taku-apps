@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>家族旅行マップ</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; }
+
+    /* ── Map ── */
+    #map { position: fixed; top: 56px; left: 0; right: 0; bottom: 0; }
+    #map.selecting { cursor: crosshair; }
+
+    /* ── Top bar ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      background: linear-gradient(135deg, #166534, #15803d);
+      color: white; display: flex; align-items: center;
+      padding: 0 16px; gap: 10px; z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    #topbar h1 { font-size: 17px; font-weight: 700; flex: 1; }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; flex-shrink: 0; }
+    .status-dot.connected { background: #4ade80; }
+
+    .topbar-btn {
+      background: rgba(255,255,255,0.18); border: none; border-radius: 8px;
+      color: white; padding: 6px 12px; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; flex-shrink: 0;
+    }
+    .topbar-btn:hover { background: rgba(255,255,255,0.28); }
+
+    /* ── Select instruction banner ── */
+    #selectBanner {
+      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.72); color: white;
+      padding: 10px 22px; border-radius: 24px; font-size: 14px;
+      z-index: 1001; display: none; white-space: nowrap;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    #selectBanner.visible { display: block; }
+
+    /* ── FAB ── */
+    #fab {
+      position: fixed; bottom: 28px; right: 24px;
+      width: 58px; height: 58px; border-radius: 50%;
+      background: linear-gradient(135deg, #166534, #15803d);
+      color: white; border: none; font-size: 30px;
+      cursor: pointer; z-index: 1000;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.15s, background 0.2s;
+      line-height: 1;
+    }
+    #fab:hover { transform: scale(1.07); }
+    #fab.cancel { background: linear-gradient(135deg, #b91c1c, #dc2626); font-size: 22px; }
+
+    /* ── Modal backdrop ── */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      z-index: 2000; display: none; align-items: flex-end; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    /* ── Modal sheet ── */
+    .modal-sheet {
+      background: white; border-radius: 22px 22px 0 0;
+      width: 100%; max-width: 640px; max-height: 92vh;
+      overflow-y: auto; padding: 10px 20px 48px;
+      animation: slideUp 0.22s ease-out;
+    }
+    @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .modal-handle {
+      width: 40px; height: 4px; background: #d1d5db;
+      border-radius: 2px; margin: 8px auto 18px;
+    }
+
+    .modal-header {
+      display: flex; align-items: center; margin-bottom: 20px;
+    }
+    .modal-title { font-size: 19px; font-weight: 700; color: #111827; flex: 1; }
+    .btn-close {
+      background: #f3f4f6; border: none; border-radius: 50%;
+      width: 34px; height: 34px; font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #6b7280; flex-shrink: 0;
+    }
+    .btn-close:hover { background: #e5e7eb; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block; font-size: 11px; font-weight: 700; color: #6b7280;
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .form-input {
+      width: 100%; padding: 11px 14px; border: 1.5px solid #e5e7eb;
+      border-radius: 11px; font-size: 15px; font-family: inherit; outline: none;
+      transition: border-color 0.2s; color: #111827;
+    }
+    .form-input:focus { border-color: #15803d; box-shadow: 0 0 0 3px rgba(21,128,61,0.1); }
+    textarea.form-input { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+    .location-tag {
+      background: #dcfce7; color: #14532d; padding: 10px 14px;
+      border-radius: 10px; font-size: 13px; margin-bottom: 18px;
+      font-weight: 500;
+    }
+
+    .photo-area {
+      border: 2px dashed #d1d5db; border-radius: 11px;
+      padding: 22px 16px; text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s; color: #9ca3af;
+      font-size: 14px;
+    }
+    .photo-area:hover { border-color: #15803d; background: #f0fdf4; }
+    .photo-area.has-photo { padding: 0; border-style: solid; border-color: #86efac; }
+    #photoPreview {
+      width: 100%; max-height: 220px; object-fit: cover;
+      border-radius: 9px; display: none;
+    }
+    .photo-placeholder { pointer-events: none; }
+    .photo-placeholder .icon { font-size: 28px; margin-bottom: 4px; }
+
+    .btn-primary {
+      width: 100%; padding: 14px; border-radius: 13px;
+      background: linear-gradient(135deg, #166534, #15803d);
+      color: white; border: none; font-size: 16px; font-weight: 700;
+      cursor: pointer; font-family: inherit; margin-top: 8px;
+      transition: opacity 0.2s;
+    }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary:not(:disabled):hover { opacity: 0.9; }
+
+    .btn-danger {
+      width: 100%; padding: 12px; margin-top: 14px; border-radius: 11px;
+      background: #fef2f2; color: #dc2626;
+      border: 1.5px solid #fecaca; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+    }
+    .btn-danger:hover { background: #fee2e2; }
+
+    /* ── View Modal ── */
+    .view-photo {
+      width: 100%; border-radius: 13px; margin-bottom: 16px;
+      object-fit: cover; max-height: 250px; display: none;
+    }
+    .view-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .tag {
+      background: #f3f4f6; color: #374151;
+      padding: 5px 12px; border-radius: 20px; font-size: 13px;
+    }
+    .view-memo { color: #4b5563; font-size: 14px; line-height: 1.75; }
+
+    /* ── Trip List ── */
+    .trip-item {
+      display: flex; gap: 14px; padding: 13px 0;
+      border-bottom: 1px solid #f3f4f6; cursor: pointer;
+      transition: background 0.15s; border-radius: 8px;
+      margin: 0 -4px; padding-left: 4px; padding-right: 4px;
+    }
+    .trip-item:hover { background: #f9fafb; }
+    .trip-thumb {
+      width: 58px; height: 58px; border-radius: 10px;
+      object-fit: cover; flex-shrink: 0; background: #f3f4f6;
+      display: flex; align-items: center; justify-content: center; font-size: 26px;
+      overflow: hidden;
+    }
+    .trip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .trip-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+    .trip-info h3 { font-size: 15px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .trip-info p { font-size: 13px; color: #9ca3af; margin-top: 3px; }
+
+    .empty-state {
+      text-align: center; color: #9ca3af; padding: 40px 0; font-size: 14px;
+    }
+    .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
+
+    /* ── Setup Modal ── */
+    #setupModal .modal-sheet { max-height: 96vh; }
+    .setup-intro { font-size: 14px; color: #6b7280; line-height: 1.7; margin-bottom: 20px; }
+    .setup-steps { counter-reset: step; margin-bottom: 20px; }
+    .setup-step {
+      background: #f9fafb; border-radius: 11px;
+      padding: 14px 16px; margin-bottom: 10px;
+      border-left: 3px solid #15803d;
+    }
+    .setup-step h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #111827; }
+    .setup-step p { font-size: 13px; color: #6b7280; line-height: 1.65; }
+    .setup-step code {
+      background: #e5e7eb; padding: 2px 7px; border-radius: 5px;
+      font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; color: #374151;
+    }
+    .setup-error {
+      color: #dc2626; font-size: 13px; background: #fef2f2;
+      border: 1px solid #fecaca; border-radius: 8px;
+      padding: 10px 14px; margin-top: 12px; display: none;
+    }
+
+    /* ── Custom Leaflet marker ── */
+    .custom-marker {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #166534, #15803d);
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 2.5px solid white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+    }
+
+    /* ── Leaflet popup tweaks ── */
+    .leaflet-popup-content-wrapper { border-radius: 12px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important; }
+    .leaflet-popup-content { margin: 12px 16px !important; font-size: 14px; font-family: inherit; }
+    .popup-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .popup-date { color: #6b7280; font-size: 13px; }
+    .popup-tap { color: #15803d; font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <h1>家族旅行マップ</h1>
+  <div class="status-dot" id="statusDot" title="接続状態"></div>
+  <button class="topbar-btn" onclick="openList()">一覧</button>
+  <button class="topbar-btn" onclick="openSetup()" title="Firebase設定">⚙</button>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Tap instruction -->
+<div id="selectBanner">地図をタップして場所を選んでね ✈</div>
+
+<!-- FAB -->
+<button id="fab" onclick="toggleAdd()">＋</button>
+
+<!-- ── Add Trip Modal ── -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">旅行を追加</div>
+      <button class="btn-close" onclick="closeAdd()">✕</button>
+    </div>
+    <div class="location-tag" id="locationTag">📍 選択した場所</div>
+
+    <div class="form-group">
+      <label class="form-label">場所の名前</label>
+      <input type="text" class="form-input" id="tripName" placeholder="例: 富士山、金閣寺、沖縄 ソーキそば...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">日にち</label>
+      <input type="date" class="form-input" id="tripDate">
+    </div>
+    <div class="form-group">
+      <label class="form-label">メンバー</label>
+      <input type="text" class="form-input" id="tripMember" placeholder="例: 家族全員、パパ+ママ...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">メモ</label>
+      <textarea class="form-input" id="tripMemo" placeholder="思い出や感想を記録しよう..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">写真</label>
+      <div class="photo-area" id="photoArea" onclick="document.getElementById('photoInput').click()">
+        <div class="photo-placeholder">
+          <div class="icon">📷</div>
+          <div>タップして写真を追加</div>
+        </div>
+        <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(this)">
+        <img id="photoPreview" class="photo-preview">
+      </div>
+    </div>
+    <button class="btn-primary" id="saveBtn" onclick="saveTrip()">保存する</button>
+  </div>
+</div>
+
+<!-- ── View Trip Modal ── -->
+<div class="modal-backdrop" id="viewModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="viewName"></div>
+      <button class="btn-close" onclick="closeView()">✕</button>
+    </div>
+    <img id="viewPhoto" class="view-photo">
+    <div class="view-tags" id="viewTags"></div>
+    <div class="view-memo" id="viewMemo"></div>
+    <button class="btn-danger" onclick="deleteCurrentTrip()">削除する</button>
+  </div>
+</div>
+
+<!-- ── List Modal ── -->
+<div class="modal-backdrop" id="listModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">旅行一覧 <span id="tripCount" style="font-size:14px;color:#9ca3af;font-weight:400"></span></div>
+      <button class="btn-close" onclick="closeList()">✕</button>
+    </div>
+    <div id="tripList"></div>
+  </div>
+</div>
+
+<!-- ── Setup Modal ── -->
+<div class="modal-backdrop" id="setupModal">
+  <div class="modal-sheet" id="setupSheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">🔥 Firebase設定</div>
+    </div>
+    <p class="setup-intro">
+      家族でリアルタイム共有するためにFirebaseを使います。<br>
+      無料プランで十分使えます。一度だけ設定が必要です。
+    </p>
+
+    <div class="setup-steps">
+      <div class="setup-step">
+        <h3>① Firebaseプロジェクトを作る</h3>
+        <p><code>console.firebase.google.com</code> を開いて「プロジェクトを追加」</p>
+      </div>
+      <div class="setup-step">
+        <h3>② Realtime Database を有効にする</h3>
+        <p>左メニュー「Realtime Database」→「データベースを作成」→「テストモードで開始」を選択</p>
+      </div>
+      <div class="setup-step">
+        <h3>③ ウェブアプリを追加して設定をコピー</h3>
+        <p>「プロジェクトの設定」（⚙）→「アプリを追加」→「ウェブ（&lt;/&gt;）」→ 表示された設定オブジェクトの<code>{...}</code>の中身をコピー</p>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Firebase設定（JSON形式で貼り付け）</label>
+      <textarea class="form-input" id="firebaseConfigInput" style="min-height:150px;font-family:monospace;font-size:12px;line-height:1.5" placeholder='{
+  "apiKey": "AIza...",
+  "authDomain": "your-app.firebaseapp.com",
+  "databaseURL": "https://your-app-default-rtdb.firebaseio.com",
+  "projectId": "your-app",
+  "storageBucket": "your-app.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123:web:abc"
+}'></textarea>
+    </div>
+
+    <button class="btn-primary" onclick="saveFirebaseConfig()">設定を保存して始める</button>
+    <div class="setup-error" id="setupError"></div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let map, db;
+let trips = {};
+let markers = {};
+let selectingMode = false;
+let pendingLat = null;
+let pendingLng = null;
+let currentViewId = null;
+let photoData = null;
+
+// ── Map Setup ─────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([36.5, 136.5], 6);
+  L.control.zoom({ position: 'bottomleft' }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18
+  }).addTo(map);
+
+  map.on('click', function(e) {
+    if (!selectingMode) return;
+    pendingLat = e.latlng.lat;
+    pendingLng = e.latlng.lng;
+    exitSelectingMode();
+    openAddForm();
+  });
+}
+
+// ── Selecting Mode ────────────────────────────────────────────────────────────
+function toggleAdd() {
+  selectingMode ? exitSelectingMode() : enterSelectingMode();
+}
+
+function enterSelectingMode() {
+  selectingMode = true;
+  document.getElementById('map').classList.add('selecting');
+  document.getElementById('selectBanner').classList.add('visible');
+  const fab = document.getElementById('fab');
+  fab.textContent = '✕';
+  fab.classList.add('cancel');
+}
+
+function exitSelectingMode() {
+  selectingMode = false;
+  document.getElementById('map').classList.remove('selecting');
+  document.getElementById('selectBanner').classList.remove('visible');
+  const fab = document.getElementById('fab');
+  fab.textContent = '＋';
+  fab.classList.remove('cancel');
+}
+
+// ── Add Form ──────────────────────────────────────────────────────────────────
+function openAddForm() {
+  photoData = null;
+  document.getElementById('tripName').value = '';
+  document.getElementById('tripDate').value = todayString();
+  document.getElementById('tripMember').value = '';
+  document.getElementById('tripMemo').value = '';
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoArea').classList.remove('has-photo');
+  document.querySelector('#photoArea .photo-placeholder').style.display = '';
+  document.getElementById('photoInput').value = '';
+  document.getElementById('locationTag').textContent =
+    `📍 緯度 ${pendingLat.toFixed(4)}, 経度 ${pendingLng.toFixed(4)}`;
+  document.getElementById('addModal').classList.add('open');
+}
+
+function closeAdd() {
+  document.getElementById('addModal').classList.remove('open');
+  pendingLat = null;
+  pendingLng = null;
+}
+
+// ── Photo ─────────────────────────────────────────────────────────────────────
+function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const MAX = 480;
+      let { width, height } = img;
+      if (width > height) {
+        if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
+      } else {
+        if (height > MAX) { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      photoData = canvas.toDataURL('image/jpeg', 0.78);
+      const preview = document.getElementById('photoPreview');
+      preview.src = photoData;
+      preview.style.display = 'block';
+      document.getElementById('photoArea').classList.add('has-photo');
+      document.querySelector('#photoArea .photo-placeholder').style.display = 'none';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+function saveTrip() {
+  const name = document.getElementById('tripName').value.trim();
+  const date = document.getElementById('tripDate').value;
+  if (!name) { alert('場所の名前を入力してください'); return; }
+  if (!date) { alert('日にちを入力してください'); return; }
+
+  const trip = {
+    name,
+    date,
+    member: document.getElementById('tripMember').value.trim(),
+    memo: document.getElementById('tripMemo').value.trim(),
+    lat: pendingLat,
+    lng: pendingLng,
+    photo: photoData || null,
+    createdAt: Date.now()
+  };
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  db.ref('trips').push(trip)
+    .then(() => closeAdd())
+    .catch(err => alert('保存エラー: ' + err.message))
+    .finally(() => { btn.disabled = false; btn.textContent = '保存する'; });
+}
+
+// ── Markers ───────────────────────────────────────────────────────────────────
+function markerIcon() {
+  return L.divIcon({
+    html: '<div class="custom-marker"></div>',
+    className: '',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -36]
+  });
+}
+
+function addMarker(id, trip) {
+  if (markers[id]) map.removeLayer(markers[id]);
+  const marker = L.marker([trip.lat, trip.lng], { icon: markerIcon() });
+  marker.bindPopup(`
+    <div class="popup-name">${escapeHtml(trip.name)}</div>
+    <div class="popup-date">${trip.date ? formatDate(trip.date) : ''}</div>
+    <div class="popup-tap">タップして詳細を見る</div>
+  `);
+  marker.on('click', () => { marker.openPopup(); });
+  marker.on('popupopen', () => {
+    setTimeout(() => {
+      const el = marker.getPopup().getElement();
+      if (el) el.addEventListener('click', () => { marker.closePopup(); openView(id); });
+    }, 10);
+  });
+  marker.addTo(map);
+  markers[id] = marker;
+}
+
+// ── Firebase Sync ─────────────────────────────────────────────────────────────
+function initFirebase(config) {
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(config);
+    db = firebase.database();
+
+    db.ref('.info/connected').on('value', snap => {
+      document.getElementById('statusDot').classList.toggle('connected', snap.val() === true);
+    });
+
+    db.ref('trips').on('value', snap => {
+      const data = snap.val() || {};
+      Object.keys(markers).forEach(id => {
+        if (!data[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+      });
+      trips = data;
+      Object.entries(data).forEach(([id, trip]) => addMarker(id, trip));
+    });
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+}
+
+// ── View Modal ────────────────────────────────────────────────────────────────
+function openView(id) {
+  const trip = trips[id];
+  if (!trip) return;
+  currentViewId = id;
+
+  const photo = document.getElementById('viewPhoto');
+  if (trip.photo) { photo.src = trip.photo; photo.style.display = 'block'; }
+  else { photo.style.display = 'none'; }
+
+  document.getElementById('viewName').textContent = trip.name;
+
+  const tags = document.getElementById('viewTags');
+  tags.innerHTML = '';
+  if (trip.date) tags.innerHTML += `<span class="tag">📅 ${formatDate(trip.date)}</span>`;
+  if (trip.member) tags.innerHTML += `<span class="tag">👨‍👩‍👧 ${escapeHtml(trip.member)}</span>`;
+
+  document.getElementById('viewMemo').textContent = trip.memo || '';
+  document.getElementById('viewModal').classList.add('open');
+}
+
+function closeView() {
+  document.getElementById('viewModal').classList.remove('open');
+  currentViewId = null;
+}
+
+function deleteCurrentTrip() {
+  if (!currentViewId) return;
+  if (!confirm('この旅行記録を削除しますか？')) return;
+  db.ref('trips/' + currentViewId).remove();
+  closeView();
+}
+
+// ── Trip List ─────────────────────────────────────────────────────────────────
+function openList() {
+  const sorted = Object.entries(trips).sort((a, b) =>
+    (b[1].date || '').localeCompare(a[1].date || ''));
+
+  document.getElementById('tripCount').textContent = `(${sorted.length}件)`;
+
+  const listEl = document.getElementById('tripList');
+  if (sorted.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><div class="icon">🗾</div><div>まだ旅行が記録されていません</div></div>';
+  } else {
+    listEl.innerHTML = sorted.map(([id, trip]) => `
+      <div class="trip-item" data-id="${escapeAttr(id)}">
+        <div class="trip-thumb">
+          ${trip.photo ? `<img src="${trip.photo}" alt="">` : '📍'}
+        </div>
+        <div class="trip-info">
+          <h3>${escapeHtml(trip.name)}</h3>
+          <p>${trip.date ? formatDate(trip.date) : '日付不明'}${trip.member ? ' · ' + escapeHtml(trip.member) : ''}</p>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.trip-item').forEach(el => {
+      el.addEventListener('click', () => goToTrip(el.dataset.id));
+    });
+  }
+
+  document.getElementById('listModal').classList.add('open');
+}
+
+function closeList() {
+  document.getElementById('listModal').classList.remove('open');
+}
+
+function goToTrip(id) {
+  closeList();
+  const trip = trips[id];
+  if (!trip) return;
+  map.setView([trip.lat, trip.lng], 12, { animate: true });
+  setTimeout(() => openView(id), 450);
+}
+
+// ── Firebase Setup ────────────────────────────────────────────────────────────
+function openSetup() {
+  const saved = localStorage.getItem('firebaseConfig');
+  if (saved) document.getElementById('firebaseConfigInput').value = saved;
+  document.getElementById('setupModal').classList.add('open');
+}
+
+function saveFirebaseConfig() {
+  const raw = document.getElementById('firebaseConfigInput').value.trim();
+  const errEl = document.getElementById('setupError');
+  errEl.style.display = 'none';
+
+  let config;
+  try {
+    config = JSON.parse(raw);
+  } catch (e) {
+    showSetupError('JSONの形式が正しくありません。{ } の中身をそのままコピーしてください。');
+    return;
+  }
+
+  if (!config.databaseURL) {
+    showSetupError('"databaseURL" が見つかりません。Realtime Database を有効にしてから設定をコピーしてください。');
+    return;
+  }
+
+  if (initFirebase(config)) {
+    localStorage.setItem('firebaseConfig', JSON.stringify(config));
+    document.getElementById('setupModal').classList.remove('open');
+  } else {
+    showSetupError('Firebase の初期化に失敗しました。設定内容を確認してください。');
+  }
+}
+
+function showSetupError(msg) {
+  const el = document.getElementById('setupError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function todayString() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function formatDate(s) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+// Close any modal on backdrop click (except setup when not yet configured)
+document.querySelectorAll('.modal-backdrop').forEach(el => {
+  el.addEventListener('click', function(e) {
+    if (e.target !== this) return;
+    if (this.id === 'setupModal' && !db) return; // can't dismiss without config
+    this.classList.remove('open');
+  });
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initMap();
+
+const savedConfig = localStorage.getItem('firebaseConfig');
+if (savedConfig) {
+  try {
+    if (!initFirebase(JSON.parse(savedConfig))) {
+      localStorage.removeItem('firebaseConfig');
+      document.getElementById('setupModal').classList.add('open');
+    }
+  } catch (e) {
+    document.getElementById('setupModal').classList.add('open');
+  }
+} else {
+  document.getElementById('setupModal').classList.add('open');
+}
+</script>
+</body>
+</html>
