@@ -340,15 +340,9 @@
 
     <div class="form-group">
       <label class="form-label">Firebase設定（JSON形式で貼り付け）</label>
-      <textarea class="form-input" id="firebaseConfigInput" style="min-height:150px;font-family:monospace;font-size:12px;line-height:1.5" placeholder='{
-  "apiKey": "AIza...",
-  "authDomain": "your-app.firebaseapp.com",
-  "databaseURL": "https://your-app-default-rtdb.firebaseio.com",
-  "projectId": "your-app",
-  "storageBucket": "your-app.appspot.com",
-  "messagingSenderId": "123456789",
-  "appId": "1:123:web:abc"
-}'></textarea>
+      <textarea class="form-input" id="firebaseConfigInput" style="min-height:150px;font-family:monospace;font-size:12px;line-height:1.5" placeholder="Firebaseコンソールに表示された
+const firebaseConfig = { ... }
+をそのままここに貼り付けてください"></textarea>
     </div>
 
     <button class="btn-primary" onclick="saveFirebaseConfig()">設定を保存して始める</button>
@@ -628,16 +622,36 @@ function openSetup() {
   document.getElementById('setupModal').classList.add('open');
 }
 
+function parseFirebaseConfig(raw) {
+  // Strip "const firebaseConfig = " wrapper if pasted from Firebase console
+  let str = raw.trim()
+    .replace(/^const\s+\w+\s*=\s*/, '')
+    .replace(/;$/, '')
+    .trim();
+
+  // Try strict JSON first
+  try { return JSON.parse(str); } catch (e) {}
+
+  // Try JavaScript object literal (keys without quotes, from Firebase console)
+  try {
+    const jsonStr = str
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3')
+      .replace(/'/g, '"');
+    return JSON.parse(jsonStr);
+  } catch (e) {}
+
+  return null;
+}
+
 function saveFirebaseConfig() {
   const raw = document.getElementById('firebaseConfigInput').value.trim();
   const errEl = document.getElementById('setupError');
   errEl.style.display = 'none';
 
-  let config;
-  try {
-    config = JSON.parse(raw);
-  } catch (e) {
-    showSetupError('JSONの形式が正しくありません。{ } の中身をそのままコピーしてください。');
+  const config = parseFirebaseConfig(raw);
+  if (!config) {
+    showSetupError('設定の形式が正しくありません。Firebaseコンソールの「firebaseConfig = { ... }」の部分をそのままコピーして貼り付けてください。');
     return;
   }
 
