@@ -2,11 +2,11 @@
 
 ## Security Rules
 
-### .env Files
-- **Do NOT read .env files** or any variants thereof.
-- This includes: `.env`, `.env.local`, `.env.production`, `.env.development`, `.env.staging`, `.env.test`, and any other `.env.*` files.
-- These files may contain secrets, API keys, and credentials that must not be exposed.
-- If environment variables are needed, ask the user to provide only the specific values required.
+### .envファイル
+- **.envファイルを読まない**（その派生ファイルも含む）。
+- 対象: `.env`、`.env.local`、`.env.production`、`.env.development`、`.env.staging`、`.env.test`、その他すべての `.env.*` ファイル。
+- これらのファイルには、公開してはならないシークレット、APIキー、認証情報が含まれている可能性がある。
+- 環境変数が必要な場合は、必要な値だけをユーザーに提供してもらう。
 
 ## Communication Rules
 
