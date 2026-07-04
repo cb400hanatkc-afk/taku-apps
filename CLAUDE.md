@@ -24,7 +24,7 @@
 - **新規作成**: `anthropic-skills:skill-creator` を使う
 - **更新**: 既存スキルを Edit で修正
 - **発動**: トリガーフレーズで自動実行
-- **保存先**: `~/.claude/skills/<name>/SKILL.md`
+- **保存先**: リポジトリ内の `.claude/skills/<name>/SKILL.md`（`~/.claude/skills/` はWeb版セッションでは毎回消えるため使わない）
 
 ## Agent Organization Rules
 
@@ -32,7 +32,7 @@
 - 「クロコでやって」と言ったら、組織全体で完結させるという意味。
 - 秘書役は直接実作業をせず、適切な担当に振り分ける。
 - 報告では「秘書から」「エンジニアが」と担当を明記する。
-- `~/.claude/agents/` に専門家ファイルを置いて、各専門家を独立したAI（subagent）として動かす。
+- リポジトリ内の `.claude/agents/` に専門家ファイルを置いて、各専門家を独立したAI（subagent）として動かす（`~/.claude/agents/` はWeb版セッションでは毎回消えるため使わない）。
 
 ## 共同研究サポートチーム Rules
 
