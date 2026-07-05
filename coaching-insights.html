@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>コーチング洞察サポート | Cognitive Insight Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #1f2937;
+    }
+
+    #app { width: 100%; max-width: 860px; display: flex; flex-direction: column; min-height: 100vh; }
+
+    .header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: white;
+      padding: 20px 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    .header h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.03em; }
+    .header p { font-size: 12px; opacity: 0.65; margin-top: 3px; }
+
+    .api-key-bar {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .api-key-bar label { font-size: 12px; font-weight: 600; color: #6b7280; white-space: nowrap; }
+    .api-key-bar input {
+      flex: 1;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-family: monospace;
+    }
+
+    .main { padding: 20px 16px 60px; display: flex; flex-direction: column; gap: 16px; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 18px;
+    }
+    .card h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: #0f3460; }
+
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+    .mode-btn {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mode-btn.active { border-color: #0f3460; background: #eef3fb; color: #0f3460; }
+
+    textarea {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.7;
+      font-family: inherit;
+      resize: vertical;
+    }
+    #transcript { min-height: 220px; }
+    #memo { min-height: 60px; margin-top: 8px; }
+    .field-label { font-size: 12px; font-weight: 600; color: #6b7280; margin: 10px 0 4px; }
+
+    .analyze-btn {
+      margin-top: 14px;
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #16213e, #0f3460);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+    }
+    .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error-box {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .status-line {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #6b7280;
+      padding: 4px 2px;
+    }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid #d1d5db;
+      border-top-color: #0f3460;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #report-card { display: none; }
+    .report-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .small-btn {
+      padding: 6px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      cursor: pointer;
+    }
+    .small-btn:hover { background: #f3f4f6; }
+
+    .report-body { font-size: 14px; line-height: 1.9; }
+    .report-body h1 { font-size: 18px; margin: 22px 0 10px; color: #0f3460; border-bottom: 2px solid #0f3460; padding-bottom: 6px; }
+    .report-body h2 { font-size: 16px; margin: 20px 0 8px; color: #16213e; border-left: 4px solid #0f3460; padding-left: 10px; }
+    .report-body h3 { font-size: 14.5px; margin: 16px 0 6px; color: #16213e; }
+    .report-body p { margin: 8px 0; }
+    .report-body ul, .report-body ol { margin: 8px 0 8px 22px; }
+    .report-body li { margin: 4px 0; }
+    .report-body strong { color: #0f3460; }
+    .report-body blockquote {
+      margin: 10px 0;
+      padding: 10px 14px;
+      background: #eef3fb;
+      border-left: 4px solid #0f3460;
+      border-radius: 0 8px 8px 0;
+    }
+    .report-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 18px 0; }
+
+    #history-card .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 6px;
+      border-bottom: 1px solid #f3f4f6;
+      cursor: pointer;
+    }
+    #history-card .history-item:hover { background: #f9fafb; }
+    .history-meta { font-size: 13px; }
+    .history-meta .date { font-size: 11px; color: #9ca3af; }
+    .history-del {
+      border: none; background: none; color: #d1d5db;
+      font-size: 16px; cursor: pointer; padding: 4px 8px;
+    }
+    .history-del:hover { color: #ef4444; }
+    .history-empty { font-size: 13px; color: #9ca3af; padding: 6px 2px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <h1>🧠 コーチング洞察サポート</h1>
+    <p>認知科学コーチング × セッション文字起こし → Cognitive Insight Report</p>
+  </div>
+
+  <div class="api-key-bar">
+    <label>Anthropic API Key:</label>
+    <input type="password" id="api-key" placeholder="sk-ant-..." spellcheck="false" />
+  </div>
+
+  <div class="main">
+    <div class="card">
+      <h2>1. セッションの視点を選ぶ</h2>
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-mode="client" id="mode-client">🙋 クライアントとして受けた</button>
+        <button class="mode-btn" data-mode="coach" id="mode-coach">🎓 コーチとして提供した</button>
+      </div>
+
+      <h2>2. 文字起こしを貼り付ける</h2>
+      <textarea id="transcript" placeholder="セッションの文字起こし全文をここに貼り付けてください。話者の区別がなくても分析できます。"></textarea>
+
+      <div class="field-label">補足メモ（任意）: 前回までの経緯・ゴール設定・気になっていることなど</div>
+      <textarea id="memo" placeholder="例: 前回はビジョン設定まで完了。今回は定性ゴールを決めるのが目的だった。"></textarea>
+
+      <button class="analyze-btn" id="analyze-btn">🔍 洞察レポートを生成する</button>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <div class="status-line" id="status-line">
+      <div class="spinner"></div>
+      <span id="status-text">分析中…（数分かかる場合があります）</span>
+    </div>
+
+    <div class="card" id="report-card">
+      <div class="report-actions">
+        <button class="small-btn" id="copy-btn">📋 Markdownをコピー</button>
+        <button class="small-btn" id="download-btn">💾 .mdをダウンロード</button>
+      </div>
+      <div class="report-body" id="report-body"></div>
+    </div>
+
+    <div class="card" id="history-card">
+      <h2>📚 分析履歴（このブラウザに保存）</h2>
+      <div id="history-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const FRAMEWORK_PROMPT = `あなたは認知科学コーチング（苫米地式コーチング理論をベースとした体系）のマスターコーチであり、コーチングセッションの文字起こしを分析して「Cognitive Insight Report」を作成する専門家です。
+
+# 分析に用いる理論フレームワーク
+以下の概念を正確に使い分けて分析してください。
+
+- **RAS（網様体賦活系）**: 重要性関数によって情報をフィルタリングする脳の仕組み。クライアントのRASが「何に向いているか／何を素通りさせているか」を特定する。
+- **スコトーマ（心理的盲点）**: RASのフィルターによって本人に見えなくなっている重要な情報・課題。セッション中に「外れた瞬間」があればそれを特定する。
+- **コンフォートゾーン / ホメオスタシス**: 現状維持の慣性。クライアントが無意識に安全圏に留まろうとする発言・行動パターン（例: 手段の羅列に逃げる、過去の延長線上で考える）を検知する。
+- **エフィカシー**: ゴール達成に対する自己能力の自己評価。
+- **Want-to vs Have-to**: 純粋な内発的動機と、義務・恐怖を起点とした行動の区別。
+- **抽象度**: 思考の視座の高さ。ビジョン（最も抽象的）→ 定性ゴール（期日つきの状態）→ 定量ゴール（測定可能な指標）→ アクションプランの階層を区別する。
+- **ゴールとアクションプランの混同**: 「〜を実施する」は手段でありゴール（状態）ではない、という観点。
+- **情動のタグ付け**: 笑い・驚き・沈黙・言い淀みなど、文字起こしから読み取れる情動反応。スコトーマが外れた瞬間（アハ体験）やホメオスタシスの抵抗のサイン。
+
+# 分析の進め方
+1. 文字起こしからコーチとクライアントの発言を区別する（話者ラベルがなくても文脈から推定する）。
+2. セッションの流れ（チェックイン → 合意確認 → 本題 → チェックアウト）を把握する。
+3. クライアントのRASの向き・スコトーマ・ホメオスタシスの動き・情動反応の瞬間を、文字起こし内の具体的な発言を根拠として特定する。
+4. 推測と根拠を区別し、根拠は必ず文字起こし内の発言・出来事に基づける。
+
+# 出力形式
+必ず以下のMarkdown構造で日本語で出力してください。各セクションは具体的で、文字起こしの内容に根ざしたものにすること。一般論やテンプレート的な記述は禁止。
+
+# 思考プロセス（Cognitive ReAct）
+
+## 【RAS分析】
+（クライアントのRASフィルターが何に向いていたか、重要性関数の偏りを分析）
+
+## 【スコトーマの特定】
+（何が盲点になっていたか。セッション中に外れたなら、その瞬間とトリガーを特定）
+
+## 【ホメオスタシスの検知】
+（現状維持の慣性がどんな形で現れたか。逃げ・抵抗のパターン）
+
+## 【情動のタグ付け】
+（笑い・驚きなどの情動反応と、その認知科学的な意味）
+
+# Cognitive Insight Report
+
+## 1. 内部表現の現状マップ
+（クライアントが「現実」として認識している世界の構造を、比喩を使って描写）
+
+## 2. スコトーマ・ポイント
+（本人が無意識に隠蔽していた真の課題と、ブレイクスルーポイント）
+
+## 3. Want-to vs Have-to 分析
+- **Have-to（義務的なエネルギー漏れ）**: …
+- **Want-to（純粋な変革の情動）**: …
+- **変革の指摘**: …
+
+## 4. エフィカシー・ブースト・メッセージ
+（クライアントに直接語りかける形式。本人の実績・強み・セッション中の気づきを根拠に、コンフォートゾーンを未来側へ引き上げるメッセージ。具体的な期日や数字がセッション中に出ていれば織り込む）
+
+## 5. 抽象度を上げる「問い」
+1. （現状の自己定義を超えさせる問い）
+2. （行動しないことのコストに気づかせる問い）
+3. （ゴール側の臨場感を高める問い）
+
+## 6. 次回セッションへの引き継ぎ
+（今回決まったこと・宿題・次回扱うべきテーマ・コーチが意識すべき介入ポイントを箇条書きで）`;
+
+const COACH_ADDENDUM = `
+
+# 追加セクション（コーチ視点モード）
+依頼者はこのセッションで「コーチ役」を務めた人物です。上記レポートに加えて、最後に以下のセクションを出力してください。
+
+## 7. コーチング・スキル観察
+- **効果的だった介入**: （問いの立て方・介入のタイミング・観点転送など、機能していた技術を発言を引用して具体的に）
+- **改善の余地**: （誘導的になった箇所、問いが抽象的すぎた／具体的すぎた箇所、介入が早すぎた／遅すぎた箇所など。根拠つきで率直に）
+- **次のセッションで試すこと**: （具体的な練習ポイントを2〜3個）`;
+
+const CLIENT_ADDENDUM = `
+
+# 補足（クライアント視点モード）
+依頼者はこのセッションで「クライアント」として受けた本人です。レポートは本人が自分の盲点と向き合い、セルフコーチング力を高めるための鏡として書いてください。エフィカシー・ブースト・メッセージは本人に向けて二人称で語りかけてください。`;
+
+const $ = (id) => document.getElementById(id);
+let mode = 'client';
+let currentReport = '';
+let history = [];
+
+// ---- API key ----
+$('api-key').value = localStorage.getItem('anthropic_api_key') || '';
+$('api-key').addEventListener('input', (e) => {
+  localStorage.setItem('anthropic_api_key', e.target.value);
+});
+
+// ---- mode toggle ----
+document.querySelectorAll('.mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b === btn));
+  });
+});
+
+// ---- markdown rendering (minimal, safe) ----
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function inlineMd(s) {
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+}
+function renderMarkdown(md) {
+  const lines = md.split('\n');
+  let html = '';
+  let inList = null; // 'ul' | 'ol'
+  const closeList = () => { if (inList) { html += `</${inList}>`; inList = null; } };
+
+  for (const raw of lines) {
+    const line = escapeHtml(raw);
+    const trimmed = line.trim();
+
+    if (/^#{1,3}\s/.test(trimmed)) {
+      closeList();
+      const level = trimmed.match(/^#+/)[0].length;
+      html += `<h${level}>${inlineMd(trimmed.replace(/^#+\s*/, ''))}</h${level}>`;
+    } else if (/^[-*]\s+/.test(trimmed)) {
+      if (inList !== 'ul') { closeList(); html += '<ul>'; inList = 'ul'; }
+      html += `<li>${inlineMd(trimmed.replace(/^[-*]\s+/, ''))}</li>`;
+    } else if (/^\d+\.\s+/.test(trimmed)) {
+      if (inList !== 'ol') { closeList(); html += '<ol>'; inList = 'ol'; }
+      html += `<li>${inlineMd(trimmed.replace(/^\d+\.\s+/, ''))}</li>`;
+    } else if (/^&gt;\s?/.test(trimmed)) {
+      closeList();
+      html += `<blockquote>${inlineMd(trimmed.replace(/^&gt;\s?/, ''))}</blockquote>`;
+    } else if (/^(---|\*\*\*)$/.test(trimmed)) {
+      closeList();
+      html += '<hr>';
+    } else if (trimmed === '') {
+      closeList();
+    } else {
+      closeList();
+      html += `<p>${inlineMd(line)}</p>`;
+    }
+  }
+  closeList();
+  return html;
+}
+
+// ---- streaming API call ----
+async function analyze() {
+  const apiKey = $('api-key').value.trim();
+  const transcript = $('transcript').value.trim();
+  const memo = $('memo').value.trim();
+
+  const errorBox = $('error-box');
+  errorBox.style.display = 'none';
+
+  if (!apiKey) { showError('APIキーを入力してください'); return; }
+  if (!transcript) { showError('セッションの文字起こしを貼り付けてください'); return; }
+
+  const systemPrompt = FRAMEWORK_PROMPT + (mode === 'coach' ? COACH_ADDENDUM : CLIENT_ADDENDUM);
+
+  let userContent = '';
+  if (memo) userContent += `# 補足メモ\n${memo}\n\n`;
+  userContent += `# セッションの文字起こし\n${transcript}`;
+
+  $('analyze-btn').disabled = true;
+  $('status-line').style.display = 'flex';
+  $('report-card').style.display = 'none';
+  currentReport = '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 16000,
+        stream: true,
+        thinking: { type: 'adaptive' },
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `API Error ${res.status}`);
+    }
+
+    $('report-card').style.display = 'block';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let lastRender = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split('\n');
+      buffer = parts.pop(); // 未完の行を持ち越す
+      for (const part of parts) {
+        if (!part.startsWith('data:')) continue;
+        const payload = part.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        let event;
+        try { event = JSON.parse(payload); } catch { continue; }
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          currentReport += event.delta.text;
+        } else if (event.type === 'content_block_start' && event.content_block?.type === 'thinking') {
+          $('status-text').textContent = '深く考えています…';
+        } else if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
+          $('status-text').textContent = 'レポートを書いています…';
+        }
+      }
+
+      const now = Date.now();
+      if (currentReport && now - lastRender > 300) {
+        $('report-body').innerHTML = renderMarkdown(currentReport);
+        lastRender = now;
+      }
+    }
+
+    if (!currentReport) throw new Error('レポートが生成されませんでした。もう一度お試しください。');
+    $('report-body').innerHTML = renderMarkdown(currentReport);
+    saveToHistory(transcript, memo);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    $('analyze-btn').disabled = false;
+    $('status-line').style.display = 'none';
+    $('status-text').textContent = '分析中…（数分かかる場合があります）';
+  }
+}
+
+function showError(msg) {
+  const box = $('error-box');
+  box.textContent = '⚠️ ' + msg;
+  box.style.display = 'block';
+}
+
+$('analyze-btn').addEventListener('click', analyze);
+
+// ---- copy & download ----
+$('copy-btn').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(currentReport);
+  $('copy-btn').textContent = '✅ コピーしました';
+  setTimeout(() => { $('copy-btn').textContent = '📋 Markdownをコピー'; }, 1500);
+});
+
+$('download-btn').addEventListener('click', () => {
+  const blob = new Blob([currentReport], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cognitive-insight-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// ---- history (localStorage) ----
+const HISTORY_KEY = 'coaching_insights_history';
+
+function loadHistory() {
+  try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { history = []; }
+  renderHistory();
+}
+
+function saveToHistory(transcript, memo) {
+  const entry = {
+    id: Date.now(),
+    date: new Date().toLocaleString('ja-JP'),
+    mode,
+    preview: transcript.slice(0, 60).replace(/\s+/g, ' ') + '…',
+    memo,
+    report: currentReport,
+  };
+  history.unshift(entry);
+  history = history.slice(0, 20);
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // 容量超過時は古いものを削って再試行
+    history = history.slice(0, 5);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch { /* 保存断念 */ }
+  }
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = $('history-list');
+  if (!history.length) {
+    list.innerHTML = '<div class="history-empty">まだ分析履歴がありません。</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const h of history) {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <div class="history-meta">
+        <div>${h.mode === 'coach' ? '🎓' : '🙋'} ${escapeHtml(h.preview)}</div>
+        <div class="date">${h.date}</div>
+      </div>
+      <button class="history-del" title="削除">✕</button>`;
+    item.querySelector('.history-meta').addEventListener('click', () => {
+      currentReport = h.report;
+      $('report-body').innerHTML = renderMarkdown(h.report);
+      $('report-card').style.display = 'block';
+      $('report-card').scrollIntoView({ behavior: 'smooth' });
+    });
+    item.querySelector('.history-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      history = history.filter((x) => x.id !== h.id);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      renderHistory();
+    });
+    list.appendChild(item);
+  }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
